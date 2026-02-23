@@ -21,8 +21,6 @@
   },
   "devDependencies": {
     "@types/pg": "^8.16.0",
-    "drizzle-kit": "^0.31.9",
-    "javascript": "^1.0.0",
-    "jsx": "^0.9.89"
+    "drizzle-kit": "^0.31.9"
   }
 }
