@@ -65,6 +65,14 @@ matchRouter.post("/", async (req, res) => {
       })
       .returning();
 
+    if (typeof res.app.locals.broadcastMatchUpdate === "function") {
+      try {
+        res.app.locals.broadcastMatchUpdate(event);
+      } catch (err) {
+        console.error("Failed to broadcast match update", err);
+      }
+    }
+
     res.status(201).json({ data: event });
   } catch (e) {
     res
