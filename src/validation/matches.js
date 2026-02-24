@@ -25,14 +25,12 @@ export const matchIdParamSchema = z.object({
     .positive({ message: "ID must be a positive integer" }),
 });
 
-// ISO date string refinement helper
-const isoDateStringSchema = z.string().refine(
-  (val) => {
-    const parsedDate = new Date(val);
-    return !isNaN(parsedDate.getTime()) && val === parsedDate.toISOString();
-  },
-  { message: "Must be a valid ISO date string" },
-);
+// ISO date string validation accepting timezone offsets
+const isoDateStringSchema = z
+  .string()
+  .refine((val) => z.iso.datetime({ offset: true }).safeParse(val).success, {
+    message: "Must be a valid ISO date string",
+  });
 
 // Schema for creating a new match
 export const createMatchSchema = z
