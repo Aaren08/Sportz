@@ -3,6 +3,7 @@ import http from "http";
 import { matchRouter } from "./routes/matches.js";
 import { attachWebSocketServer } from "./ws/server.js";
 import { securityMiddleware } from "./arcjet.js";
+import { commentaryRouter } from "./routes/commentary.js";
 
 const PORT = process.env.PORT || 8000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -18,12 +19,17 @@ app.get("/", (req, res) => {
   res.json({ message: "Welcome to Sportz Server!" });
 });
 
+// Apply security middleware globally
 app.use(securityMiddleware);
 
 // Routes
 app.use("/matches", matchRouter);
-const { broadcastMatchUpdate } = attachWebSocketServer(server);
+app.use("/matches/:id/commentary", commentaryRouter);
+
+const { broadcastMatchUpdate, broadcastCommentaryUpdate } =
+  attachWebSocketServer(server);
 app.locals.broadcastMatchUpdate = broadcastMatchUpdate; // Make it available in routes
+app.locals.broadcastCommentaryUpdate = broadcastCommentaryUpdate; // Make it available in routes
 
 // Start shared HTTP + WebSocket server
 server.listen(PORT, HOST, () => {
