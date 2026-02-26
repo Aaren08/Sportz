@@ -1,17 +1,73 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { wsArcjet } from "../arcjet.js";
 
+const matchSubscribers = new Map();
+
+function subscribe(socket, matchId) {
+  if (!matchSubscribers.has(matchId)) {
+    matchSubscribers.set(matchId, new Set());
+  }
+  matchSubscribers.get(matchId).add(socket);
+}
+
+function unsubscribe(socket, matchId) {
+  if (matchSubscribers.has(matchId)) {
+    matchSubscribers.get(matchId).delete(socket);
+    if (matchSubscribers.get(matchId).size === 0) {
+      matchSubscribers.delete(matchId);
+    }
+  }
+}
+
+function cleanUpSubscriptions(socket) {
+  for (const [matchId, subscribers] of matchSubscribers.entries()) {
+    if (subscribers.has(socket)) {
+      subscribers.delete(socket);
+      if (subscribers.size === 0) {
+        matchSubscribers.delete(matchId);
+      }
+    }
+  }
+}
+
 function sendJson(socket, payload) {
   if (socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify(payload));
 }
 
-function broadcast(wss, payload) {
+function broadcastToAll(wss, payload) {
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       sendJson(client, payload);
     }
   });
+}
+
+function broadcastToMatch(matchId, payload) {
+  if (matchSubscribers.has(matchId)) {
+    for (const socket of matchSubscribers.get(matchId)) {
+      sendJson(socket, payload);
+    }
+  }
+}
+
+function handleMessage(socket, message) {
+  let parsed;
+  try {
+    parsed = JSON.parse(message);
+  } catch (error) {
+    sendJson(socket, { type: "error", message: "Invalid JSON" });
+    return;
+  }
+  if (parsed.type === "subscribe" && parsed.matchId) {
+    subscribe(socket, parsed.matchId);
+    sendJson(socket, { type: "subscribed", matchId: parsed.matchId });
+  } else if (parsed.type === "unsubscribe" && parsed.matchId) {
+    unsubscribe(socket, parsed.matchId);
+    sendJson(socket, { type: "unsubscribed", matchId: parsed.matchId });
+  } else {
+    sendJson(socket, { type: "error", message: "Unknown message type" });
+  }
 }
 
 // This module sets up a WebSocket server and provides a function to broadcast match updates to all connected clients.
@@ -39,13 +95,23 @@ export function attachWebSocketServer(server) {
         socket.close(1011, "Internal Server Error");
       }
     }
-
+    socket.subscriptions = new Set();
     sendJson(socket, { type: "welcome" });
+    socket.on("message", (message) => handleMessage(socket, message));
+    socket.on("error", (error) => {
+      console.error("WebSocket error:", error);
+      socket.terminate();
+    });
+    socket.on("close", () => cleanUpSubscriptions(socket));
     socket.on("error", console.error);
   });
 
   function broadcastMatchUpdate(match) {
-    broadcast(wss, { type: "match_update", data: match });
+    broadcastToAll(wss, { type: "match_update", data: match });
   }
-  return { broadcastMatchUpdate };
+
+  function broadcastCommentaryUpdate(matchId, commentary) {
+    broadcastToMatch(matchId, { type: "commentary_update", data: commentary });
+  }
+  return { broadcastMatchUpdate, broadcastCommentaryUpdate };
 }
