@@ -3,18 +3,43 @@ import { wsArcjet } from "../arcjet.js";
 
 const matchSubscribers = new Map();
 
-function subscribe(socket, matchId) {
-  if (!matchSubscribers.has(matchId)) {
-    matchSubscribers.set(matchId, new Set());
+function normalizeMatchId(matchId) {
+  if (matchId === null || matchId === undefined) {
+    throw new TypeError("matchId is required");
   }
-  matchSubscribers.get(matchId).add(socket);
+
+  if (typeof matchId === "object") {
+    const toStringFn = matchId?.toString;
+    if (
+      typeof toStringFn !== "function" ||
+      toStringFn === Object.prototype.toString
+    ) {
+      throw new TypeError("matchId must be a string, number, or string-like");
+    }
+  }
+
+  const normalizedMatchId = String(matchId);
+  if (!normalizedMatchId) {
+    throw new TypeError("matchId must not be empty");
+  }
+
+  return normalizedMatchId;
+}
+
+function subscribe(socket, matchId) {
+  const normalizedMatchId = normalizeMatchId(matchId);
+  if (!matchSubscribers.has(normalizedMatchId)) {
+    matchSubscribers.set(normalizedMatchId, new Set());
+  }
+  matchSubscribers.get(normalizedMatchId).add(socket);
 }
 
 function unsubscribe(socket, matchId) {
-  if (matchSubscribers.has(matchId)) {
-    matchSubscribers.get(matchId).delete(socket);
-    if (matchSubscribers.get(matchId).size === 0) {
-      matchSubscribers.delete(matchId);
+  const normalizedMatchId = normalizeMatchId(matchId);
+  if (matchSubscribers.has(normalizedMatchId)) {
+    matchSubscribers.get(normalizedMatchId).delete(socket);
+    if (matchSubscribers.get(normalizedMatchId).size === 0) {
+      matchSubscribers.delete(normalizedMatchId);
     }
   }
 }
@@ -44,8 +69,9 @@ function broadcastToAll(wss, payload) {
 }
 
 function broadcastToMatch(matchId, payload) {
-  if (matchSubscribers.has(matchId)) {
-    for (const socket of matchSubscribers.get(matchId)) {
+  const normalizedMatchId = normalizeMatchId(matchId);
+  if (matchSubscribers.has(normalizedMatchId)) {
+    for (const socket of matchSubscribers.get(normalizedMatchId)) {
       sendJson(socket, payload);
     }
   }
@@ -59,12 +85,22 @@ function handleMessage(socket, message) {
     sendJson(socket, { type: "error", message: "Invalid JSON" });
     return;
   }
-  if (parsed.type === "subscribe" && parsed.matchId) {
-    subscribe(socket, parsed.matchId);
-    sendJson(socket, { type: "subscribed", matchId: parsed.matchId });
-  } else if (parsed.type === "unsubscribe" && parsed.matchId) {
-    unsubscribe(socket, parsed.matchId);
-    sendJson(socket, { type: "unsubscribed", matchId: parsed.matchId });
+  if (parsed.type === "subscribe") {
+    try {
+      const normalizedMatchId = normalizeMatchId(parsed.matchId);
+      subscribe(socket, normalizedMatchId);
+      sendJson(socket, { type: "subscribed", matchId: normalizedMatchId });
+    } catch (error) {
+      sendJson(socket, { type: "error", message: "Invalid matchId" });
+    }
+  } else if (parsed.type === "unsubscribe") {
+    try {
+      const normalizedMatchId = normalizeMatchId(parsed.matchId);
+      unsubscribe(socket, normalizedMatchId);
+      sendJson(socket, { type: "unsubscribed", matchId: normalizedMatchId });
+    } catch (error) {
+      sendJson(socket, { type: "error", message: "Invalid matchId" });
+    }
   } else {
     sendJson(socket, { type: "error", message: "Unknown message type" });
   }
