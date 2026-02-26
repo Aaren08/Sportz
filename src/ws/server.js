@@ -103,7 +103,6 @@ export function attachWebSocketServer(server) {
       socket.terminate();
     });
     socket.on("close", () => cleanUpSubscriptions(socket));
-    socket.on("error", console.error);
   });
 
   function broadcastMatchUpdate(match) {

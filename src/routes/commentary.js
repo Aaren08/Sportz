@@ -40,9 +40,9 @@ commentaryRouter.get("/", async (req, res) => {
 
     return res.json({ data: results });
   } catch (error) {
+    console.error("Error retrieving commentary:", error);
     return res.status(500).json({
       error: "Failed to retrieve commentary.",
-      details: JSON.stringify(error),
     });
   }
 });
@@ -84,9 +84,9 @@ commentaryRouter.post("/", async (req, res) => {
 
     return res.status(201).json({ data: createdCommentary });
   } catch (error) {
+    console.error("Error creating commentary:", error);
     return res.status(500).json({
       error: "Failed to create commentary.",
-      details: JSON.stringify(error),
     });
   }
 });
